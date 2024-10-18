@@ -44,7 +44,7 @@ def display_banner():
     print(banner)
 
 
-# Scrapy Spider class for the crawler
+# Scrapy Spider class for crawler
 class OSINTSpider(scrapy.Spider):
     name = "datahawk_spider"
     
@@ -56,14 +56,14 @@ class OSINTSpider(scrapy.Spider):
         self.verbose = verbose
         self.output_format = output_format
 
-        # Create a unique output file name based on the domain of the first URL
+        # Create unique output file name based on the domain of the first URL
         parsed_url = urlparse(self.start_urls[0])
         self.output_file = f"datahawk_results_{parsed_url.netloc.replace('.', '_')}.{self.output_format}"  # Output file name
 
         self.user_agents = self.get_user_agents()  # Dynamic user agent list
 
     def get_user_agents(self):
-        # Fetch user agents from an external source
+        # Fetch user agents from external source
         try:
             response = requests.get("https://user-agents.net/")  # Example URL, replace with a real one if needed
             user_agents = re.findall(r'User-Agent: (.+?)\n', response.text)  # Extract user agents
@@ -116,13 +116,13 @@ class OSINTSpider(scrapy.Spider):
         else:
             self.log(f"No data matching query '{self.query}' found on {page_url}", level=logging.INFO)
         
-        # Follow pagination links intelligently
+        # Follow pagination links
         next_pages = response.css('a.next::attr(href)').getall()  # Get all pagination links
         for next_page in next_pages:
             yield response.follow(next_page, self.parse)
 
     def save_finding(self, data, source_url):
-        # Save findings to text file, CSV, or JSON based on user preference
+        # Save findings to text file, CSV, or JSON based on preference
         if self.output_format == 'txt':
             with open(self.output_file, 'a') as f:
                 f.write(f"Data: {data}\nSource URL: {source_url}\nScraped At: {datetime.now(timezone.utc).isoformat()}\n{'-'*40}\n")
@@ -174,7 +174,7 @@ def parse_arguments():
     
     return parser.parse_args()
 
-# Function to get URLs from user
+# Function to get URLs
 def get_urls_from_user():
     urls = input("Please enter the URLs to crawl, separated by spaces: ")
     return urls.split()
