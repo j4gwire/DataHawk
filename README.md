@@ -1,6 +1,6 @@
 # DataHawk - OSINT Web Crawler
 
-**DataHawk** is an advanced Open Source Intelligence (OSINT) web crawler designed to automate the extraction of sensitive information from websites. This tool can scrape email addresses, usernames, and other specified queries, making it invaluable for researchers, cybersecurity professionals, and data analysts.
+**DataHawk** is a OSINT web crawler designed to automate the extraction of sensitive information from websites. This tool can scrape email addresses, usernames, and other specified queries, making it invaluable for researchers, cybersecurity professionals, and data analysts.
 
 ## Features
 
