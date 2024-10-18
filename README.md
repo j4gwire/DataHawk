@@ -57,7 +57,7 @@ To get started, run the crawler and follow the prompts to enter the URLs you wis
 **DataHawk** is intended for educational purposes, research, and ethical testing only. Do not use this tool against websites without proper authorization. Misuse of this tool may be illegal and is solely the responsibility of the user.
 
 ## Contributing
-If you would like to contribute to DataHawk, please fork the repository and submit a pull request with your changes. For any issues, feel free to open an issue in the GitHub repository.
+If you would like to contribute to DataHawk, please fork the repository and submit a pull request with your changes. For any issues, feel free to open an issue in the repository.
 
 ## License
 This project is licensed under the MIT License. See the LICENSE file for details.
