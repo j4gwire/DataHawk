@@ -1,5 +1,4 @@
 scrapy>=2.5.0
-scrapy-selenium>=0.0.7
-selenium>=4.1.0
+scrapy-selenium>=1.10.0
+requests>=2.26.0
 lxml>=4.6.3
-pillow>=8.2.0
