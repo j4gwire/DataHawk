@@ -8,8 +8,11 @@ import logging
 import threading
 import time
 import random
-from scrapy_selenium import SeleniumRequest  # Importing SeleniumRequest for dynamic content handling
-from urllib.parse import urlparse  # To parse URLs
+import json
+import csv
+from scrapy_selenium import SeleniumRequest
+from urllib.parse import urlparse
+import requests
 
 # Banner
 def display_banner():
@@ -19,43 +22,55 @@ def display_banner():
     Automatic data scraping for sensitive information leaks
 
     Example usage:
+    1. Default (emails):          python DataHawk.py
+    2. Usernames:                 python DataHawk.py -q username
+    3. Phone numbers:             python DataHawk.py -q phone
+    4. URLs:                      python DataHawk.py -q url
+    5. IP addresses:              python DataHawk.py -q ip
+    6. Custom regex:              python DataHawk.py -q "regex"
+    7. Multithreading (4):        python DataHawk.py --threads 4
+    8. Output in CSV:             python DataHawk.py --output csv
+    9. Output in JSON:            python DataHawk.py --output json
+    10. Search all types:         python DataHawk.py -q all
 
-    1. Crawl for emails (default query):
-       python DataHawk.py
-
-    2. Crawl for usernames:
-       python DataHawk.py -q username
-
-    3. Use a proxy for crawling:
-       python DataHawk.py --proxy http://proxyserver:port
-
-    4. Crawl with multithreading:
-       python DataHawk.py --threads 4
+    Default settings:
+    - Threads: 1
+    - Output format: txt
+    - Verbose: False
+    - Proxy: None
 
     Use -h or --help for more options.
     """
     print(banner)
 
+
 # Scrapy Spider class for the crawler
 class OSINTSpider(scrapy.Spider):
     name = "datahawk_spider"
     
-    def __init__(self, start_urls=None, query=None, proxy=None, verbose=False, *args, **kwargs):
+    def __init__(self, start_urls=None, query=None, proxy=None, verbose=False, output_format='txt', *args, **kwargs):
         super(OSINTSpider, self).__init__(*args, **kwargs)
         self.start_urls = start_urls if start_urls else ["http://example.com"]
         self.query = query if query else "email"
         self.proxy = proxy
         self.verbose = verbose
+        self.output_format = output_format
 
         # Create a unique output file name based on the domain of the first URL
         parsed_url = urlparse(self.start_urls[0])
-        self.output_file = f"datahawk_results_{parsed_url.netloc.replace('.', '_')}.txt"  # Output file name
+        self.output_file = f"datahawk_results_{parsed_url.netloc.replace('.', '_')}.{self.output_format}"  # Output file name
 
-        self.user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3', 
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0', 
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/604.3.5 (KHTML, like Gecko) Version/11.0.1 Safari/604.3.5'
-        ]
+        self.user_agents = self.get_user_agents()  # Dynamic user agent list
+
+    def get_user_agents(self):
+        # Fetch user agents from an external source
+        try:
+            response = requests.get("https://user-agents.net/")  # Example URL, replace with a real one if needed
+            user_agents = re.findall(r'User-Agent: (.+?)\n', response.text)  # Extract user agents
+            return user_agents or ['Mozilla/5.0']  # Fallback if no user agents found
+        except Exception as e:
+            self.log(f"Error fetching user agents: {e}", level=logging.ERROR)
+            return ['Mozilla/5.0']  # Fallback user agent
 
     def start_requests(self):
         for url in self.start_urls:
@@ -65,7 +80,7 @@ class OSINTSpider(scrapy.Spider):
                 yield SeleniumRequest(url=url, callback=self.parse, headers=headers, meta={"proxy": self.proxy}, errback=self.error_handler)
             else:
                 yield SeleniumRequest(url=url, callback=self.parse, headers=headers, errback=self.error_handler)
-            sleep_time = random.uniform(2, 5)  # Rate limiting (delay between requests)
+            sleep_time = random.uniform(3, 6)  # Adjusted rate limiting
             self.log(f"Sleeping for {sleep_time:.2f} seconds before next request.", level=logging.DEBUG)
             time.sleep(sleep_time)
 
@@ -77,16 +92,21 @@ class OSINTSpider(scrapy.Spider):
         page_url = response.url
         page_content = response.text
 
-        # Define regex patterns
-        email_pattern = r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+'
-        username_pattern = r'@\w+'
+        # Define regex patterns for multiple queries
+        patterns = {
+            'email': r'[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+',
+            'username': r'@\w+',
+            'phone': r'\+?\d[\d -]{8,}\d',  # Example for phone numbers
+            'url': r'https?://[^\s]+',
+            'ip': r'\b(?:\d{1,3}\.){3}\d{1,3}\b',  # IPv4 addresses
+        }
 
-        # Search for emails or custom query within the page content
         found_items = []
-        if self.query == 'email':
-            found_items = re.findall(email_pattern, page_content)
-        elif self.query == 'username':
-            found_items = re.findall(username_pattern, page_content)
+        if self.query in patterns:
+            found_items = re.findall(patterns[self.query], page_content)
+        elif self.query == 'all':
+            for key, pattern in patterns.items():
+                found_items.extend(re.findall(pattern, page_content))
         else:
             found_items = re.findall(self.query, page_content)
 
@@ -102,9 +122,19 @@ class OSINTSpider(scrapy.Spider):
             yield response.follow(next_page, self.parse)
 
     def save_finding(self, data, source_url):
-        # Save findings to text file in readable format
-        with open(self.output_file, 'a') as f:
-            f.write(f"Data: {data}\nSource URL: {source_url}\nScraped At: {datetime.now(timezone.utc).isoformat()}\n{'-'*40}\n")
+        # Save findings to text file, CSV, or JSON based on user preference
+        if self.output_format == 'txt':
+            with open(self.output_file, 'a') as f:
+                f.write(f"Data: {data}\nSource URL: {source_url}\nScraped At: {datetime.now(timezone.utc).isoformat()}\n{'-'*40}\n")
+        elif self.output_format == 'csv':
+            with open(self.output_file, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow([data, source_url, datetime.now(timezone.utc).isoformat()])
+        elif self.output_format == 'json':
+            with open(self.output_file, 'a') as f:
+                json.dump({"data": data, "source_url": source_url, "scraped_at": datetime.now(timezone.utc).isoformat()}, f)
+                f.write('\n')  # Newline for each JSON object
+
         self.log(f"Data saved: {data}", level=logging.INFO)
 
     def error_handler(self, failure):
@@ -115,16 +145,16 @@ class OSINTSpider(scrapy.Spider):
             super().log(message, level)
 
 # Run crawler programmatically
-def run_osint_crawler(start_urls, query, proxy=None, threads=1, verbose=False):
+def run_osint_crawler(start_urls, query, proxy=None, threads=1, verbose=False, output_format='txt'):
     process = CrawlerProcess(settings={
         "USER_AGENT": random.choice(['Mozilla/5.0', 'ScrapyBot/1.0']),
-        "LOG_LEVEL": logging.INFO,  # Set log level
-        "DOWNLOAD_DELAY": random.uniform(2, 5),  # Dynamic delay between requests
+        "LOG_LEVEL": logging.INFO,
+        "DOWNLOAD_DELAY": random.uniform(3, 6),  # Dynamic delay between requests
     })
     
     # Run with multiple threads
     def crawl_with_threads():
-        process.crawl(OSINTSpider, start_urls=start_urls, query=query, proxy=proxy, verbose=verbose)
+        process.crawl(OSINTSpider, start_urls=start_urls, query=query, proxy=proxy, verbose=verbose, output_format=output_format)
         process.start()
     
     # Run threads in parallel
@@ -136,7 +166,8 @@ def run_osint_crawler(start_urls, query, proxy=None, threads=1, verbose=False):
 # Argument parser for CLI options
 def parse_arguments():
     parser = argparse.ArgumentParser(description="DataHawk Web Crawler: Scrape websites for data with optional proxy support.")
-    parser.add_argument('-q', '--query', help='Custom query to search for (e.g., email, username)', default='email')
+    parser.add_argument('-q', '--query', help='Custom query to search for (e.g., email, username, phone, url, ip, or custom regex)', default='email')
+    parser.add_argument('--output', help='Output format (txt, csv, json)', default='txt', choices=['txt', 'csv', 'json'])
     parser.add_argument('--proxy', help='HTTP/HTTPS proxy to use (e.g., http://proxyserver:port)', default=None)
     parser.add_argument('--threads', type=int, help='Number of threads for multithreading', default=1)
     parser.add_argument('-v', '--verbose', action='store_true', help='Enable verbose output')
@@ -160,4 +191,4 @@ if __name__ == "__main__":
     urls = get_urls_from_user()
     
     # Run crawler with user-supplied arguments and multithreading
-    run_osint_crawler(start_urls=urls, query=args.query, proxy=args.proxy, threads=args.threads, verbose=args.verbose)
+    run_osint_crawler(start_urls=urls, query=args.query, proxy=args.proxy, threads=args.threads, verbose=args.verbose, output_format=args.output)
