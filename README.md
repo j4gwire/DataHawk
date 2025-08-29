@@ -11,7 +11,7 @@ DataHawk is a OSINT tool for scraping websites to identify sensitive information
 ## Installation
 1. **Clone the repository:**
    ```
-   git clone https://github.com/ScribeAegis/DataHawk.git
+   git clone https://github.com/j4gwire/DataHawk.git
    cd DataHawk
    ```
 ## Install the dependencies:
